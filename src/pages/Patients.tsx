@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Patient } from "@/lib/types";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 const Patients = () => {
   const [search, setSearch] = useState("");
@@ -32,6 +33,7 @@ const Patients = () => {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth(); // Obtenemos el usuario autenticado
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -59,9 +61,16 @@ const Patients = () => {
 
   const createPatient = useMutation({
     mutationFn: async (newPatient: Omit<Patient, "id" | "created_at" | "updated_at" | "professional_id">) => {
+      if (!user) throw new Error("No user authenticated");
+      
+      const patientWithProfessional = {
+        ...newPatient,
+        professional_id: user.id
+      };
+
       const { data, error } = await supabase
         .from("patients")
-        .insert([newPatient])
+        .insert([patientWithProfessional])
         .select()
         .single();
 
