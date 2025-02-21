@@ -24,3 +24,18 @@ export interface Patient {
   updated_at: string;
   professional_id: string;
 }
+
+export type PaymentStatus = 'pending' | 'completed' | 'cancelled';
+
+export interface Transaction {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  amount: number;
+  description: string | null;
+  status: PaymentStatus;
+  payment_date: string;
+  created_at: string;
+  updated_at: string;
+  patient?: Patient;
+}

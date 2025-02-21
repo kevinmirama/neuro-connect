@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Patients from "./pages/Patients";
+import Finances from "./pages/Finances";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,14 @@ const App = () => (
             }
           />
           <Route
+            path="/finances"
+            element={
+              <ProtectedRoute>
+                <Finances />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/appointments"
             element={
               <ProtectedRoute>
@@ -59,23 +68,7 @@ const App = () => (
             }
           />
           <Route
-            path="/finances"
-            element={
-              <ProtectedRoute>
-                <Navigate to="/" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/professionals"
-            element={
-              <ProtectedRoute>
-                <Navigate to="/" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/faq"
             element={
               <ProtectedRoute>
                 <Navigate to="/" />
