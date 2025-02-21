@@ -2,9 +2,13 @@
 import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { Calendar, Users, DollarSign, UserCog, HelpCircle, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useToast } from "@/components/ui/use-toast";
 
 export const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
+  const { signOut, profile } = useAuth();
+  const { toast } = useToast();
 
   const menuItems = [
     { icon: Users, label: "Pacientes", path: "/patients" },
@@ -14,6 +18,23 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
     { icon: HelpCircle, label: "FAQ", path: "/faq" },
   ];
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Sesión cerrada",
+        description: "Has cerrado sesión exitosamente",
+      });
+      navigate("/auth");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo cerrar la sesión",
+      });
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -21,6 +42,11 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
           <SidebarContent>
             <div className="p-4">
               <h1 className="text-2xl font-bold text-neuro-600">NeuroConnect</h1>
+              {profile && (
+                <p className="text-sm text-gray-600 mt-2">
+                  {profile.first_name} {profile.last_name}
+                </p>
+              )}
             </div>
             <SidebarGroup>
               <SidebarGroupContent>
@@ -37,7 +63,10 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                     </SidebarMenuItem>
                   ))}
                   <SidebarMenuItem>
-                    <SidebarMenuButton className="w-full text-red-500">
+                    <SidebarMenuButton 
+                      onClick={handleSignOut}
+                      className="w-full text-red-500"
+                    >
                       <LogOut className="w-4 h-4 mr-2" />
                       <span>Cerrar Sesión</span>
                     </SidebarMenuButton>
