@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Patients from "./pages/Patients";
 import Finances from "./pages/Finances";
+import Professionals from "./pages/Professionals";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,15 +61,15 @@ const App = () => (
             }
           />
           <Route
-            path="/appointments"
+            path="/professionals"
             element={
               <ProtectedRoute>
-                <Navigate to="/" />
+                <Professionals />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/professionals"
+            path="/appointments"
             element={
               <ProtectedRoute>
                 <Navigate to="/" />
