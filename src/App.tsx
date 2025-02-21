@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/lib/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Patients from "./pages/Patients";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,7 +46,7 @@ const App = () => (
             path="/patients"
             element={
               <ProtectedRoute>
-                <Navigate to="/" />
+                <Patients />
               </ProtectedRoute>
             }
           />
