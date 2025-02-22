@@ -34,6 +34,15 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Transaction, Patient, PaymentStatus } from "@/lib/types";
 import { useAuth } from "@/lib/hooks/useAuth";
 
+// Definir una interfaz para el estado del formulario
+interface TransactionFormData {
+  patient_id: string;
+  amount: string; // Mantener como string para el input
+  description: string;
+  status: PaymentStatus;
+  payment_date: string;
+}
+
 const Finances = () => {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -42,11 +51,11 @@ const Finances = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<TransactionFormData>({
     patient_id: "",
     amount: "",
     description: "",
-    status: "pending" as PaymentStatus,
+    status: "pending",
     payment_date: new Date().toISOString().split('T')[0],
   });
 
@@ -77,18 +86,18 @@ const Finances = () => {
   });
 
   const createTransaction = useMutation({
-    mutationFn: async (newTransaction: Omit<Transaction, "id" | "created_at" | "updated_at" | "professional_id">) => {
+    mutationFn: async (newTransaction: TransactionFormData) => {
       if (!user) throw new Error("No user authenticated");
 
-      const transactionWithProfessional = {
+      const transactionData = {
         ...newTransaction,
         professional_id: user.id,
-        amount: parseFloat(newTransaction.amount as unknown as string),
+        amount: parseFloat(newTransaction.amount), // Convertir a número aquí
       };
 
       const { data, error } = await supabase
         .from("transactions")
-        .insert([transactionWithProfessional])
+        .insert([transactionData])
         .select()
         .single();
 
@@ -111,10 +120,15 @@ const Finances = () => {
   });
 
   const updateTransaction = useMutation({
-    mutationFn: async (transaction: Partial<Transaction>) => {
+    mutationFn: async (transaction: TransactionFormData) => {
+      const updatedData = {
+        ...transaction,
+        amount: parseFloat(transaction.amount), // Convertir a número aquí
+      };
+
       const { data, error } = await supabase
         .from("transactions")
-        .update({ ...transaction, amount: parseFloat(transaction.amount as unknown as string) })
+        .update(updatedData)
         .eq("id", selectedTransaction?.id)
         .select()
         .single();
