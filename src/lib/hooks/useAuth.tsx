@@ -10,88 +10,111 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const initialize = async () => {
-      try {
-        // Obtener la sesión inicial
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!mounted) return;
-
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error initializing auth:", err);
-        setError("Error al inicializar la autenticación");
-        setLoading(false);
-      }
-    };
-
-    // Inicializar
-    initialize();
-
-    // Escuchar cambios en la autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!mounted) return;
-
-        setUser(session?.user ?? null);
-        
-        try {
-          if (session?.user) {
-            await fetchProfile(session.user.id);
-          } else {
-            setProfile(null);
-            setLoading(false);
-          }
-        } catch (err) {
-          console.error("Error in auth state change:", err);
-          setError("Error al actualizar el estado de autenticación");
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
+  // Función para obtener el perfil del usuario
   const fetchProfile = async (userId: string) => {
     try {
+      console.log("Fetching profile for user:", userId);
       const { data, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
-      if (profileError) throw profileError;
-      
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        throw profileError;
+      }
+
+      console.log("Profile data received:", data);
       setProfile(data);
       setError(null);
     } catch (err) {
-      console.error("Error fetching profile:", err);
+      console.error("Error in fetchProfile:", err);
       setError("Error al obtener el perfil");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    let mounted = true;
+    console.log("Auth effect running");
+
+    const initialize = async () => {
+      try {
+        console.log("Initializing auth");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("Session error:", sessionError);
+          throw sessionError;
+        }
+
+        if (!mounted) {
+          console.log("Component unmounted, stopping initialization");
+          return;
+        }
+
+        console.log("Session status:", session ? "Active" : "No session");
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error in initialize:", err);
+        setError("Error al inicializar la autenticación");
+        setLoading(false);
+      }
+    };
+
+    // Establecer un timeout de seguridad
+    const timeoutId = setTimeout(() => {
+      if (loading && mounted) {
+        console.log("Auth timeout reached, forcing loading state to false");
+        setLoading(false);
+        setError("Tiempo de espera agotado");
+      }
+    }, 5000); // 5 segundos de timeout máximo
+
+    initialize();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth state changed:", event, session?.user?.id);
+        
+        if (!mounted) return;
+
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      console.log("Cleaning up auth effect");
+      mounted = false;
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const signOut = async () => {
     try {
+      console.log("Signing out");
       setLoading(true);
-      await supabase.auth.signOut();
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
       setError(null);
     } catch (err) {
-      console.error("Error signing out:", err);
+      console.error("Error in signOut:", err);
       setError("Error al cerrar sesión");
     } finally {
       setLoading(false);
