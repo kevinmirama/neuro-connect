@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { loading, profile } = useAuth();
+  const { profile } = useAuth();
 
   const modules = [
     {
@@ -39,17 +39,6 @@ const Index = () => {
       color: "bg-purple-500",
     },
   ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neuro-600 mx-auto mb-4"></div>
-          <p className="text-neuro-600">Cargando...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <Layout>
