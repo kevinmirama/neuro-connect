@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 export const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, loading } = useAuth();
   const { toast } = useToast();
 
   const menuItems = [
@@ -34,6 +34,17 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
       });
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neuro-600 mx-auto mb-4"></div>
+          <p className="text-neuro-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
