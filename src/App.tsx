@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Patients from "./pages/Patients";
 import Finances from "./pages/Finances";
 import Professionals from "./pages/Professionals";
+import Appointments from "./pages/Appointments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -79,7 +80,7 @@ const App = () => (
             path="/appointments"
             element={
               <ProtectedRoute>
-                <Index />
+                <Appointments />
               </ProtectedRoute>
             }
           />
