@@ -12,11 +12,52 @@ import Finances from "./pages/Finances";
 import Professionals from "./pages/Professionals";
 import Appointments from "./pages/Appointments";
 import NotFound from "./pages/NotFound";
+import { useToast } from "./components/ui/use-toast";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
+  const { toast } = useToast();
+
+  // Mostrar errores de autenticación
+  React.useEffect(() => {
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error,
+      });
+    }
+  }, [error, toast]);
+
+  // Establecer un timeout para el estado de carga
+  React.useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    if (loading) {
+      timeoutId = setTimeout(() => {
+        toast({
+          variant: "destructive",
+          title: "Error de conexión",
+          description: "No se pudo establecer la conexión. Por favor, intenta de nuevo.",
+        });
+      }, 10000); // 10 segundos de timeout
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [loading, toast]);
 
   if (loading) {
     return (
