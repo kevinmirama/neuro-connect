@@ -3,119 +3,109 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types";
+import { useToast } from "@/components/ui/use-toast";
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  // Función para obtener el perfil del usuario
   const fetchProfile = async (userId: string) => {
     try {
-      console.log("Fetching profile for user:", userId);
       const { data, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .maybeSingle();
 
-      if (profileError) {
-        console.error("Error fetching profile:", profileError);
-        throw profileError;
-      }
+      if (profileError) throw profileError;
 
-      console.log("Profile data received:", data);
       setProfile(data);
       setError(null);
     } catch (err) {
-      console.error("Error in fetchProfile:", err);
+      console.error("Error fetching profile:", err);
       setError("Error al obtener el perfil");
-    } finally {
-      setLoading(false);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo obtener tu perfil. Por favor, recarga la página.",
+      });
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    console.log("Auth effect running");
 
-    const initialize = async () => {
+    const refreshSession = async () => {
       try {
-        console.log("Initializing auth");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("Session error:", sessionError);
-          throw sessionError;
-        }
-
-        if (!mounted) {
-          console.log("Component unmounted, stopping initialization");
-          return;
-        }
-
-        console.log("Session status:", session ? "Active" : "No session");
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error in initialize:", err);
-        setError("Error al inicializar la autenticación");
-        setLoading(false);
-      }
-    };
-
-    // Establecer un timeout de seguridad
-    const timeoutId = setTimeout(() => {
-      if (loading && mounted) {
-        console.log("Auth timeout reached, forcing loading state to false");
-        setLoading(false);
-        setError("Tiempo de espera agotado");
-      }
-    }, 5000); // 5 segundos de timeout máximo
-
-    initialize();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.id);
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) throw error;
         
         if (!mounted) return;
 
-        setUser(session?.user ?? null);
-
         if (session?.user) {
+          setUser(session.user);
           await fetchProfile(session.user.id);
         } else {
+          setUser(null);
           setProfile(null);
-          setLoading(false);
         }
+      } catch (err) {
+        console.error("Session refresh error:", err);
+        toast({
+          variant: "destructive",
+          title: "Error de sesión",
+          description: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
+        });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    // Inicializar sesión
+    refreshSession();
+
+    // Configurar refresco periódico de la sesión
+    const intervalId = setInterval(refreshSession, 4 * 60 * 1000); // Cada 4 minutos
+
+    // Suscribirse a cambios de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+
+        if (session?.user) {
+          setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
+        setLoading(false);
       }
     );
 
     return () => {
-      console.log("Cleaning up auth effect");
       mounted = false;
-      clearTimeout(timeoutId);
+      clearInterval(intervalId);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [toast]);
 
   const signOut = async () => {
     try {
-      console.log("Signing out");
       setLoading(true);
-      const { error: signOutError } = await supabase.auth.signOut();
-      if (signOutError) throw signOutError;
-      setError(null);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (err) {
-      console.error("Error in signOut:", err);
-      setError("Error al cerrar sesión");
+      console.error("Error signing out:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo cerrar sesión. Por favor, intenta nuevamente.",
+      });
     } finally {
       setLoading(false);
     }
