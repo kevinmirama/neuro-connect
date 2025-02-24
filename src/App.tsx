@@ -12,6 +12,7 @@ import Patients from "./pages/Patients";
 import Finances from "./pages/Finances";
 import Professionals from "./pages/Professionals";
 import Appointments from "./pages/Appointments";
+import FAQ from "./pages/FAQ";
 import NotFound from "./pages/NotFound";
 import { useToast } from "./components/ui/use-toast";
 
@@ -123,6 +124,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <Appointments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/faq"
+            element={
+              <ProtectedRoute>
+                <FAQ />
               </ProtectedRoute>
             }
           />
