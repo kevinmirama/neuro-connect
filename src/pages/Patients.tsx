@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
@@ -22,18 +21,169 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { 
+  Pencil, 
+  Trash2, 
+  Plus, 
+  Search, 
+  FileText, 
+  DollarSign,
+  CheckCircle,
+  XCircle,
+  Upload
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Patient } from "@/lib/types";
+import type { Patient, Transaction } from "@/lib/types";
 import { useAuth } from "@/lib/hooks/useAuth";
+
+const PaymentDialog = ({ 
+  patient, 
+  onClose 
+}: { 
+  patient: Patient; 
+  onClose: () => void;
+}) => {
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  const createTransaction = useMutation({
+    mutationFn: async () => {
+      if (!user || !file) return;
+
+      const { data: transaction, error: transactionError } = await supabase
+        .from("transactions")
+        .insert({
+          patient_id: patient.id,
+          professional_id: user.id,
+          amount: parseFloat(amount),
+          description,
+          status: "pending",
+          payment_date: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (transactionError) throw transactionError;
+
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${transaction.id}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("payment_receipts")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      return transaction;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["patients"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Pago registrado exitosamente" });
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Error creating transaction:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo registrar el pago",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amount || !file) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Por favor completa todos los campos requeridos",
+      });
+      return;
+    }
+    createTransaction.mutate();
+  };
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Registrar Pago - {patient.first_name} {patient.last_name}</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="amount">Monto ($)</Label>
+          <Input
+            id="amount"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="description">Descripción</Label>
+          <Textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Detalles del pago..."
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="receipt">Comprobante de Pago</Label>
+          <Input
+            id="receipt"
+            type="file"
+            accept="image/*,.pdf"
+            onChange={handleFileChange}
+            required
+          />
+          <p className="text-sm text-gray-500">
+            Formatos aceptados: imágenes y PDF
+          </p>
+        </div>
+        <div className="flex justify-end space-x-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={createTransaction.isPending}
+          >
+            {createTransaction.isPending ? (
+              <>Registrando...</>
+            ) : (
+              <>
+                <DollarSign className="w-4 h-4 mr-2" />
+                Registrar Pago
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </DialogContent>
+  );
+};
 
 const Patients = () => {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth(); // Obtenemos el usuario autenticado
+  const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -51,11 +201,20 @@ const Patients = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("patients")
-        .select("*")
+        .select(`
+          *,
+          transactions (
+            id,
+            amount,
+            status,
+            payment_date
+          )
+        `)
+        .eq("professional_id", user?.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as Patient[];
+      return data as (Patient & { transactions: Transaction[] })[];
     },
   });
 
@@ -319,43 +478,94 @@ const Patients = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Apellidos</TableHead>
-                <TableHead>Fecha de Nacimiento</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Teléfono</TableHead>
+                <TableHead>Último Pago</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPatients?.map((patient) => (
-                <TableRow key={patient.id}>
-                  <TableCell>{patient.first_name}</TableCell>
-                  <TableCell>{patient.last_name}</TableCell>
-                  <TableCell>{new Date(patient.date_of_birth).toLocaleDateString()}</TableCell>
-                  <TableCell>{patient.email}</TableCell>
-                  <TableCell>{patient.phone}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(patient)}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (window.confirm("¿Estás seguro de eliminar este paciente?")) {
-                          deletePatient.mutate(patient.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filteredPatients?.map((patient) => {
+                const lastTransaction = patient.transactions?.[0];
+                return (
+                  <TableRow key={patient.id}>
+                    <TableCell>
+                      {patient.first_name} {patient.last_name}
+                    </TableCell>
+                    <TableCell>{patient.email}</TableCell>
+                    <TableCell>{patient.phone}</TableCell>
+                    <TableCell>
+                      {lastTransaction ? (
+                        <div className="flex items-center">
+                          <span className="mr-2">
+                            ${lastTransaction.amount}
+                          </span>
+                          {lastTransaction.status === "completed" ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : lastTransaction.status === "pending" ? (
+                            <FileText className="w-4 h-4 text-yellow-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                        </div>
+                      ) : (
+                        "Sin pagos"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {lastTransaction?.status === "completed" ? (
+                        <span className="text-green-500">Al día</span>
+                      ) : (
+                        <span className="text-yellow-500">Pendiente</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(patient)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedPatient(patient);
+                              setShowPaymentDialog(true);
+                            }}
+                          >
+                            <Upload className="w-4 h-4" />
+                          </Button>
+                        </DialogTrigger>
+                        {selectedPatient && (
+                          <PaymentDialog
+                            patient={selectedPatient}
+                            onClose={() => {
+                              setShowPaymentDialog(false);
+                              setSelectedPatient(null);
+                            }}
+                          />
+                        )}
+                      </Dialog>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (window.confirm("¿Estás seguro de eliminar este paciente?")) {
+                            deletePatient.mutate(patient.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
