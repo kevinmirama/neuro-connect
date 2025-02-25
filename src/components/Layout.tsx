@@ -19,9 +19,10 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
     { icon: HelpCircle, label: "FAQ", path: "/faq" },
   ];
 
-  // Menú para profesionales (solo pacientes y agenda)
+  // Menú para profesionales (pacientes y finanzas para subir soportes de pago)
   const professionalMenuItems = [
     { icon: Users, label: "Pacientes", path: "/patients" },
+    { icon: DollarSign, label: "Finanzas", path: "/finances" },
     { icon: Calendar, label: "Agenda", path: "/appointments" },
     { icon: HelpCircle, label: "FAQ", path: "/faq" },
   ];
