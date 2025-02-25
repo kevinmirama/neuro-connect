@@ -10,13 +10,24 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
   const { signOut, profile, loading } = useAuth();
   const { toast } = useToast();
 
-  const menuItems = [
+  // Menú para administradores (todos los módulos)
+  const adminMenuItems = [
     { icon: Users, label: "Pacientes", path: "/patients" },
     { icon: Calendar, label: "Agenda", path: "/appointments" },
     { icon: DollarSign, label: "Finanzas", path: "/finances" },
     { icon: UserCog, label: "Profesionales", path: "/professionals" },
     { icon: HelpCircle, label: "FAQ", path: "/faq" },
   ];
+
+  // Menú para profesionales (solo pacientes y agenda)
+  const professionalMenuItems = [
+    { icon: Users, label: "Pacientes", path: "/patients" },
+    { icon: Calendar, label: "Agenda", path: "/appointments" },
+    { icon: HelpCircle, label: "FAQ", path: "/faq" },
+  ];
+
+  // Seleccionar el menú según el rol del usuario
+  const menuItems = profile?.role === "admin" ? adminMenuItems : professionalMenuItems;
 
   const handleSignOut = async () => {
     try {
@@ -54,9 +65,12 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
             <div className="p-4">
               <h1 className="text-2xl font-bold text-neuro-600">NeuroConnect</h1>
               {profile && (
-                <p className="text-sm text-gray-600 mt-2">
-                  {profile.first_name} {profile.last_name}
-                </p>
+                <div className="text-sm text-gray-600 mt-2">
+                  <p>{profile.first_name} {profile.last_name}</p>
+                  <p className="text-xs mt-1 bg-gray-200 inline-block px-2 py-0.5 rounded-full">
+                    {profile.role === "admin" ? "Administrativo" : "Profesional"}
+                  </p>
+                </div>
               )}
             </div>
             <SidebarGroup>

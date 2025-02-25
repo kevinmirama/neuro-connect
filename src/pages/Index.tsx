@@ -8,31 +8,125 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 
 const AdminDashboard = () => {
+  // Dashboard para administradores
+  const { data: pendingTransactions, isLoading: isLoadingTransactions } = useQuery({
+    queryKey: ["admin-pending-transactions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*, patients(*), professional:profiles(*)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: professionals, isLoading: isLoadingProfessionals } = useQuery({
+    queryKey: ["professionals"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("role", "professional");
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: patients, isLoading: isLoadingPatients } = useQuery({
+    queryKey: ["all-patients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("patients")
+        .select("*");
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  if (isLoadingTransactions || isLoadingProfessionals || isLoadingPatients) {
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <Card>
-        <CardHeader>
-          <CardTitle>Total Profesionales</CardTitle>
-        </CardHeader>
-        <CardContent className="text-2xl font-bold">12</CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Pacientes Activos</CardTitle>
-        </CardHeader>
-        <CardContent className="text-2xl font-bold">145</CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Citas esta semana</CardTitle>
-        </CardHeader>
-        <CardContent className="text-2xl font-bold">32</CardContent>
-      </Card>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Profesionales</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{professionals?.length || 0}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pacientes Activos</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{patients?.length || 0}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pagos Pendientes</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{pendingTransactions?.length || 0}</CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Últimos Profesionales</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {professionals?.slice(0, 5).map((professional) => (
+                <div key={professional.id} className="flex justify-between items-center border-b pb-2">
+                  <span>{professional.first_name} {professional.last_name}</span>
+                  <span className="text-sm text-gray-500">
+                    {professional.specialty || "Sin especialidad"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Pagos Pendientes de Revisión</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {pendingTransactions?.slice(0, 5).map((transaction) => (
+                <div key={transaction.id} className="flex justify-between items-center border-b pb-2">
+                  <span className="text-sm">
+                    {transaction.patients?.first_name} {transaction.patients?.last_name}
+                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="font-bold">${transaction.amount}</span>
+                    <span className="text-xs text-gray-500">
+                      Enviado por: {transaction.professional?.first_name}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
 
 const ProfessionalDashboard = () => {
+  // Dashboard para profesionales
   const { user } = useAuth();
 
   const { data: patients, isLoading } = useQuery({
@@ -96,7 +190,6 @@ const ProfessionalDashboard = () => {
             <CardTitle>Próximas Citas</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {/* Implementar contador de próximas citas */}
             0
           </CardContent>
         </Card>

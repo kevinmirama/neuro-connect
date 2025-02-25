@@ -29,7 +29,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, Search, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Transaction, Patient, PaymentStatus } from "@/lib/types";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -49,7 +49,7 @@ const Finances = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [formData, setFormData] = useState<TransactionFormData>({
     patient_id: "",
@@ -59,16 +59,17 @@ const Finances = () => {
     payment_date: new Date().toISOString().split('T')[0],
   });
 
+  // Cargar transacciones con datos del profesional que las creó
   const { data: transactions, isLoading: isLoadingTransactions } = useQuery({
     queryKey: ["transactions"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*, patient:patients(*)")
+        .select("*, patient:patients(*), professional:profiles(*)")
         .order("payment_date", { ascending: false });
 
       if (error) throw error;
-      return data as Transaction[];
+      return data as (Transaction & { professional: { first_name: string; last_name: string } })[];
     },
   });
 
@@ -207,7 +208,10 @@ const Finances = () => {
     (transaction) =>
       transaction.patient?.first_name.toLowerCase().includes(search.toLowerCase()) ||
       transaction.patient?.last_name.toLowerCase().includes(search.toLowerCase()) ||
-      transaction.description?.toLowerCase().includes(search.toLowerCase())
+      transaction.description?.toLowerCase().includes(search.toLowerCase()) ||
+      (transaction.professional?.first_name + " " + transaction.professional?.last_name)
+        .toLowerCase()
+        .includes(search.toLowerCase())
   );
 
   // Calcular totales
@@ -218,6 +222,22 @@ const Finances = () => {
   const completedAmount = filteredTransactions
     ?.filter((t) => t.status === "completed")
     .reduce((acc, curr) => acc + curr.amount, 0) || 0;
+
+  // Verificar si el usuario no es administrador, redirigir
+  if (profile?.role !== "admin") {
+    return (
+      <Layout>
+        <div className="container mx-auto py-6 space-y-6">
+          <div className="text-center p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Acceso Restringido</h2>
+            <p className="text-gray-600">
+              Lo sentimos, solo los usuarios administrativos pueden acceder a esta sección.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -365,6 +385,7 @@ const Finances = () => {
               <TableRow>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Paciente</TableHead>
+                <TableHead>Profesional</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Descripción</TableHead>
@@ -380,6 +401,11 @@ const Finances = () => {
                   <TableCell>
                     {transaction.patient
                       ? `${transaction.patient.first_name} ${transaction.patient.last_name}`
+                      : "N/A"}
+                  </TableCell>
+                  <TableCell>
+                    {transaction.professional
+                      ? `${transaction.professional.first_name} ${transaction.professional.last_name}`
                       : "N/A"}
                   </TableCell>
                   <TableCell>${transaction.amount.toFixed(2)}</TableCell>
@@ -413,26 +439,15 @@ const Finances = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        if (
-                          window.confirm(
-                            "¿Estás seguro de eliminar esta transacción?"
-                          )
-                        ) {
-                          deleteTransaction.mutate(transaction.id);
-                        }
+                        // Aquí se podría implementar la visualización del comprobante
+                        toast({
+                          title: "Comprobante",
+                          description: "Visualizando comprobante del pago",
+                        });
                       }}
                     >
-                      <Trash2 className="w-4 h-4 text-red-500" />
+                      <Eye className="w-4 h-4 text-blue-500" />
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-    </Layout>
-  );
-};
-
-export default Finances;
+                    <Button
+                      variant="ghost"
+                      
