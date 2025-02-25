@@ -450,4 +450,24 @@ const Finances = () => {
                     </Button>
                     <Button
                       variant="ghost"
-                      
+                      size="icon"
+                      onClick={() => {
+                        if (window.confirm("¿Estás seguro de eliminar esta transacción?")) {
+                          deleteTransaction.mutate(transaction.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
+export default Finances;
