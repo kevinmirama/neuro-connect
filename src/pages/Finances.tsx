@@ -711,4 +711,78 @@ const ProfessionalFinances = () => {
         <div>Cargando...</div>
       ) : (
         <Table>
-          <TableHeader
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Paciente</TableHead>
+              <TableHead>Monto</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead className="text-right">Comprobante</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {myTransactions?.map((transaction) => (
+              <TableRow key={transaction.id}>
+                <TableCell>
+                  {new Date(transaction.payment_date).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  {transaction.patient
+                    ? `${transaction.patient.first_name} ${transaction.patient.last_name}`
+                    : "N/A"}
+                </TableCell>
+                <TableCell>${transaction.amount.toFixed(2)}</TableCell>
+                <TableCell>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs ${
+                      transaction.status === "completed"
+                        ? "bg-green-100 text-green-800"
+                        : transaction.status === "pending"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {transaction.status === "completed"
+                      ? "Completado"
+                      : transaction.status === "pending"
+                      ? "Pendiente"
+                      : "Cancelado"}
+                  </span>
+                </TableCell>
+                <TableCell>{transaction.description}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      toast({
+                        title: "Comprobante",
+                        description: "Visualizando comprobante del pago",
+                      });
+                    }}
+                  >
+                    <Eye className="w-4 h-4 text-blue-500" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+};
+
+// Componente principal que decide qué vista mostrar según el rol del usuario
+const Finances = () => {
+  const { profile } = useAuth();
+  
+  return (
+    <Layout>
+      {profile?.role === "admin" ? <AdminFinances /> : <ProfessionalFinances />}
+    </Layout>
+  );
+};
+
+export default Finances;
