@@ -56,6 +56,7 @@ interface PaymentUploadFormData {
 const AdminFinances = () => {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [viewFile, setViewFile] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -94,6 +95,7 @@ const AdminFinances = () => {
       if (error) throw error;
       return data as Patient[];
     },
+    staleTime: 60000, // Cache por 1 minuto para evitar consultas frecuentes
   });
 
   const createTransaction = useMutation({
@@ -211,6 +213,14 @@ const AdminFinances = () => {
       description: "",
       status: "pending",
       payment_date: new Date().toISOString().split('T')[0],
+    });
+  };
+
+  const handleViewReceipt = (transactionId: string) => {
+    // En una aplicación real, aquí obtendríamos la URL del comprobante
+    toast({
+      title: "Visualizando comprobante",
+      description: `Comprobante para transacción ${transactionId}`,
     });
   };
 
@@ -332,8 +342,11 @@ const AdminFinances = () => {
                 <Button type="button" variant="outline" onClick={handleCloseDialog}>
                   Cancelar
                 </Button>
-                <Button type="submit">
-                  {selectedTransaction ? "Actualizar" : "Crear"}
+                <Button type="submit" disabled={createTransaction.isPending || updateTransaction.isPending}>
+                  {selectedTransaction ? 
+                    (updateTransaction.isPending ? "Actualizando..." : "Actualizar") : 
+                    (createTransaction.isPending ? "Creando..." : "Crear")
+                  }
                 </Button>
               </div>
             </form>
@@ -371,7 +384,10 @@ const AdminFinances = () => {
       </div>
 
       {isLoadingTransactions ? (
-        <div>Cargando...</div>
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neuro-600"></div>
+          <p className="ml-2 text-neuro-600">Cargando transacciones...</p>
+        </div>
       ) : (
         <Table>
           <TableHeader>
@@ -386,75 +402,77 @@ const AdminFinances = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTransactions?.map((transaction) => (
-              <TableRow key={transaction.id}>
-                <TableCell>
-                  {new Date(transaction.payment_date).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  {transaction.patient
-                    ? `${transaction.patient.first_name} ${transaction.patient.last_name}`
-                    : "N/A"}
-                </TableCell>
-                <TableCell>
-                  {transaction.professional
-                    ? `${transaction.professional.first_name} ${transaction.professional.last_name}`
-                    : "N/A"}
-                </TableCell>
-                <TableCell>${transaction.amount.toFixed(2)}</TableCell>
-                <TableCell>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      transaction.status === "completed"
-                        ? "bg-green-100 text-green-800"
-                        : transaction.status === "pending"
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {transaction.status === "completed"
-                      ? "Completado"
-                      : transaction.status === "pending"
-                      ? "Pendiente"
-                      : "Cancelado"}
-                  </span>
-                </TableCell>
-                <TableCell>{transaction.description}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEdit(transaction)}
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      // Aquí se podría implementar la visualización del comprobante
-                      toast({
-                        title: "Comprobante",
-                        description: "Visualizando comprobante del pago",
-                      });
-                    }}
-                  >
-                    <Eye className="w-4 h-4 text-blue-500" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      if (window.confirm("¿Estás seguro de eliminar esta transacción?")) {
-                        deleteTransaction.mutate(transaction.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 text-red-500" />
-                  </Button>
+            {filteredTransactions?.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  No se encontraron transacciones
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              filteredTransactions?.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell>
+                    {new Date(transaction.payment_date).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    {transaction.patient
+                      ? `${transaction.patient.first_name} ${transaction.patient.last_name}`
+                      : "N/A"}
+                  </TableCell>
+                  <TableCell>
+                    {transaction.professional
+                      ? `${transaction.professional.first_name} ${transaction.professional.last_name}`
+                      : "N/A"}
+                  </TableCell>
+                  <TableCell>${transaction.amount.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        transaction.status === "completed"
+                          ? "bg-green-100 text-green-800"
+                          : transaction.status === "pending"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {transaction.status === "completed"
+                        ? "Completado"
+                        : transaction.status === "pending"
+                        ? "Pendiente"
+                        : "Cancelado"}
+                    </span>
+                  </TableCell>
+                  <TableCell>{transaction.description}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(transaction)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleViewReceipt(transaction.id)}
+                    >
+                      <Eye className="w-4 h-4 text-blue-500" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (window.confirm("¿Estás seguro de eliminar esta transacción?")) {
+                          deleteTransaction.mutate(transaction.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       )}
@@ -475,8 +493,8 @@ const ProfessionalFinances = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Cargar pacientes del profesional
-  const { data: patients } = useQuery({
+  // Cargar pacientes del profesional con caché para evitar consultas frecuentes
+  const { data: patients, isLoading: isLoadingPatients } = useQuery({
     queryKey: ["professional-patients", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -490,9 +508,10 @@ const ProfessionalFinances = () => {
       if (error) throw error;
       return data as Patient[];
     },
+    staleTime: 60000, // Cache por 1 minuto
   });
 
-  // Cargar transacciones enviadas por el profesional
+  // Cargar transacciones enviadas por el profesional con caché
   const { data: myTransactions, isLoading: isLoadingTransactions } = useQuery({
     queryKey: ["professional-transactions", user?.id],
     queryFn: async () => {
@@ -507,6 +526,7 @@ const ProfessionalFinances = () => {
       if (error) throw error;
       return data as (Transaction & { patient: Patient })[];
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -539,9 +559,16 @@ const ProfessionalFinances = () => {
 
       if (transactionError) throw transactionError;
 
-      // 2. Subir el archivo (en una aplicación real se subiría a Storage)
-      // Simulamos la carga exitosa del comprobante
-      console.log("Archivo que se subiría:", formData.file.name);
+      // 2. Subir el archivo
+      const fileExt = formData.file.name.split('.').pop();
+      const filePath = `${transaction.id}.${fileExt}`;
+      
+      console.log("Archivo que se subiría:", formData.file.name, "con path:", filePath);
+
+      // En una aplicación real, aquí se implementaría la subida real:
+      // const { error: uploadError } = await supabase.storage
+      //   .from("payment_receipts")
+      //   .upload(filePath, formData.file);
 
       return transaction;
     },
@@ -595,24 +622,28 @@ const ProfessionalFinances = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="patient">Paciente</Label>
-                  <Select
-                    value={uploadFormData.patient_id}
-                    onValueChange={(value) =>
-                      setUploadFormData({ ...uploadFormData, patient_id: value })
-                    }
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar paciente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {patients?.map((patient) => (
-                        <SelectItem key={patient.id} value={patient.id}>
-                          {`${patient.first_name} ${patient.last_name}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {isLoadingPatients ? (
+                    <div className="text-sm text-gray-500">Cargando pacientes...</div>
+                  ) : (
+                    <Select
+                      value={uploadFormData.patient_id}
+                      onValueChange={(value) =>
+                        setUploadFormData({ ...uploadFormData, patient_id: value })
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar paciente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {patients?.map((patient) => (
+                          <SelectItem key={patient.id} value={patient.id}>
+                            {`${patient.first_name} ${patient.last_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="amount">Monto</Label>
@@ -684,7 +715,11 @@ const ProfessionalFinances = () => {
             <CardTitle>Mis Pacientes</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {patients?.length || 0}
+            {isLoadingPatients ? (
+              <span className="text-gray-400">...</span>
+            ) : (
+              patients?.length || 0
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -692,7 +727,11 @@ const ProfessionalFinances = () => {
             <CardTitle>Pagos Registrados</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {myTransactions?.length || 0}
+            {isLoadingTransactions ? (
+              <span className="text-gray-400">...</span>
+            ) : (
+              myTransactions?.length || 0
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -700,7 +739,11 @@ const ProfessionalFinances = () => {
             <CardTitle>Pendientes de Aprobación</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {myTransactions?.filter(t => t.status === "pending").length || 0}
+            {isLoadingTransactions ? (
+              <span className="text-gray-400">...</span>
+            ) : (
+              myTransactions?.filter(t => t.status === "pending").length || 0
+            )}
           </CardContent>
         </Card>
       </div>
@@ -708,7 +751,10 @@ const ProfessionalFinances = () => {
       <h2 className="text-xl font-semibold mt-8">Mis Registros de Pago</h2>
       
       {isLoadingTransactions ? (
-        <div>Cargando...</div>
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neuro-600"></div>
+          <p className="ml-2 text-neuro-600">Cargando transacciones...</p>
+        </div>
       ) : (
         <Table>
           <TableHeader>
@@ -722,51 +768,59 @@ const ProfessionalFinances = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {myTransactions?.map((transaction) => (
-              <TableRow key={transaction.id}>
-                <TableCell>
-                  {new Date(transaction.payment_date).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  {transaction.patient
-                    ? `${transaction.patient.first_name} ${transaction.patient.last_name}`
-                    : "N/A"}
-                </TableCell>
-                <TableCell>${transaction.amount.toFixed(2)}</TableCell>
-                <TableCell>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      transaction.status === "completed"
-                        ? "bg-green-100 text-green-800"
-                        : transaction.status === "pending"
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {transaction.status === "completed"
-                      ? "Completado"
-                      : transaction.status === "pending"
-                      ? "Pendiente"
-                      : "Cancelado"}
-                  </span>
-                </TableCell>
-                <TableCell>{transaction.description}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      toast({
-                        title: "Comprobante",
-                        description: "Visualizando comprobante del pago",
-                      });
-                    }}
-                  >
-                    <Eye className="w-4 h-4 text-blue-500" />
-                  </Button>
+            {myTransactions?.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  No has registrado pagos aún
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              myTransactions?.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell>
+                    {new Date(transaction.payment_date).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    {transaction.patient
+                      ? `${transaction.patient.first_name} ${transaction.patient.last_name}`
+                      : "N/A"}
+                  </TableCell>
+                  <TableCell>${transaction.amount.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        transaction.status === "completed"
+                          ? "bg-green-100 text-green-800"
+                          : transaction.status === "pending"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {transaction.status === "completed"
+                        ? "Completado"
+                        : transaction.status === "pending"
+                        ? "Pendiente"
+                        : "Cancelado"}
+                    </span>
+                  </TableCell>
+                  <TableCell>{transaction.description}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        toast({
+                          title: "Comprobante",
+                          description: "Visualizando comprobante del pago",
+                        });
+                      }}
+                    >
+                      <Eye className="w-4 h-4 text-blue-500" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       )}

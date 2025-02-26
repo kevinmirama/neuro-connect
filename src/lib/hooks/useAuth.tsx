@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types";
@@ -11,6 +11,18 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  // Referencia para controlar los temporizadores y evitar fugas de memoria
+  const timersRef = useRef<{
+    inactivity: NodeJS.Timeout | null;
+    refresh: NodeJS.Timeout | null;
+  }>({
+    inactivity: null,
+    refresh: null
+  });
+
+  // Control de estado para evitar actualizaciones después de desmontar
+  const mountedRef = useRef(true);
 
   // Optimizamos el fetch del perfil usando useCallback para memorizar la función
   const fetchProfile = useCallback(async (userId: string) => {
@@ -23,81 +35,145 @@ export const useAuth = () => {
 
       if (profileError) throw profileError;
 
-      setProfile(data);
-      setError(null);
+      if (mountedRef.current) {
+        setProfile(data);
+        setError(null);
+      }
     } catch (err) {
       console.error("Error fetching profile:", err);
-      setError("Error al obtener el perfil");
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo obtener tu perfil. Por favor, recarga la página.",
-      });
+      if (mountedRef.current) {
+        setError("Error al obtener el perfil");
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo obtener tu perfil. Por favor, recarga la página.",
+        });
+      }
     }
   }, [toast]);
 
-  // Optimizamos el refresco de sesión con useCallback para evitar recreaciones innecesarias
+  // Optimizamos el refresco de sesión con useCallback
   const refreshSession = useCallback(async () => {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) throw error;
       
-      if (session?.user) {
-        setUser(session.user);
-        await fetchProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
+      if (mountedRef.current) {
+        if (session?.user) {
+          setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
       }
     } catch (err) {
       console.error("Session refresh error:", err);
-      toast({
-        variant: "destructive",
-        title: "Error de sesión",
-        description: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
-      });
+      if (mountedRef.current) {
+        toast({
+          variant: "destructive",
+          title: "Error de sesión",
+          description: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
+        });
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [fetchProfile, toast]);
 
-  useEffect(() => {
-    let mounted = true;
-    let inactivityTimer: NodeJS.Timeout;
+  // Función para resetear el temporizador de inactividad
+  const resetInactivityTimer = useCallback(() => {
+    if (timersRef.current.inactivity) {
+      clearTimeout(timersRef.current.inactivity);
+    }
+    
+    // Si hay un usuario activo, configuramos un temporizador de inactividad (30 minutos)
+    if (user && mountedRef.current) {
+      timersRef.current.inactivity = setTimeout(() => {
+        console.log('Sesión inactiva por 30 minutos, refrescando...');
+        refreshSession();
+      }, 30 * 60 * 1000); // 30 minutos
+    }
+  }, [user, refreshSession]);
 
-    // Función para resetear el temporizador de inactividad
-    const resetInactivityTimer = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-      
-      // Si hay un usuario activo, configuramos un temporizador de inactividad (30 minutos)
-      if (user) {
-        inactivityTimer = setTimeout(() => {
-          console.log('Sesión inactiva por 30 minutos, refrescando...');
-          refreshSession();
-        }, 30 * 60 * 1000); // 30 minutos
+  // Optimizamos signOut para hacerlo más rápido y evitar bloqueos
+  const signOut = useCallback(async () => {
+    try {
+      // Limpiamos temporizadores para evitar operaciones después del cierre de sesión
+      if (timersRef.current.inactivity) {
+        clearTimeout(timersRef.current.inactivity);
       }
-    };
+      if (timersRef.current.refresh) {
+        clearInterval(timersRef.current.refresh);
+      }
+      
+      // Limpiar inmediatamente el estado para UI más responsiva
+      if (mountedRef.current) {
+        setUser(null);
+        setProfile(null);
+      }
+      
+      // Entonces hacer la solicitud real de cierre de sesión (sin esperar)
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (err) {
+      console.error("Error signing out:", err);
+      if (mountedRef.current) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo cerrar sesión correctamente. La sesión se ha cerrado localmente.",
+        });
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [toast]);
+
+  // Hook de efecto para manejar la autenticación
+  useEffect(() => {
+    mountedRef.current = true;
+
+    // Inicializar sesión con timeout para evitar bloqueos infinitos
+    const initTimeout = setTimeout(() => {
+      if (loading && mountedRef.current) {
+        setLoading(false);
+        setError("No se pudo conectar en un tiempo razonable");
+        toast({
+          variant: "destructive",
+          title: "Error de conexión",
+          description: "La conexión está tardando demasiado. Por favor, intenta más tarde.",
+        });
+      }
+    }, 15000); // 15 segundos máximo para la inicialización
 
     // Inicializar sesión al cargar
     const initializeAuth = async () => {
       await refreshSession();
-      if (mounted) resetInactivityTimer();
+      if (mountedRef.current) resetInactivityTimer();
+      clearTimeout(initTimeout); // Limpiamos el timeout si la inicialización fue exitosa
     };
 
     initializeAuth();
 
-    // Configurar refresco periódico más frecuente (2 minutos en lugar de 4)
-    const intervalId = setInterval(() => {
-      console.log('Refrescando sesión periódicamente...');
-      refreshSession();
-      if (mounted) resetInactivityTimer();
-    }, 2 * 60 * 1000); // Cada 2 minutos
+    // Configurar refresco periódico (cada 2 minutos)
+    timersRef.current.refresh = setInterval(() => {
+      if (mountedRef.current) {
+        console.log('Refrescando sesión periódicamente...');
+        refreshSession();
+        resetInactivityTimer();
+      }
+    }, 2 * 60 * 1000);
 
-    // Suscribirse a cambios de autenticación con manejo optimizado
+    // Suscribirse a cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
 
         console.log('Auth state changed:', event);
         
@@ -113,53 +189,38 @@ export const useAuth = () => {
       }
     );
 
-    // Agregar detectores de actividad del usuario para reiniciar el temporizador
+    // Detectores de actividad del usuario
     const handleUserActivity = () => {
-      if (mounted) resetInactivityTimer();
+      if (mountedRef.current) resetInactivityTimer();
     };
 
+    // Agregar detectores de eventos para reiniciar el temporizador
     window.addEventListener('mousedown', handleUserActivity);
     window.addEventListener('keydown', handleUserActivity);
     window.addEventListener('touchstart', handleUserActivity);
     window.addEventListener('scroll', handleUserActivity);
 
+    // Limpiar recursos al desmontar
     return () => {
-      mounted = false;
-      clearInterval(intervalId);
-      clearTimeout(inactivityTimer);
+      mountedRef.current = false;
+      clearTimeout(initTimeout);
+      
+      if (timersRef.current.refresh) {
+        clearInterval(timersRef.current.refresh);
+      }
+      
+      if (timersRef.current.inactivity) {
+        clearTimeout(timersRef.current.inactivity);
+      }
+      
       subscription.unsubscribe();
       
-      // Eliminar detectores de eventos al desmontar
       window.removeEventListener('mousedown', handleUserActivity);
       window.removeEventListener('keydown', handleUserActivity);
       window.removeEventListener('touchstart', handleUserActivity);
       window.removeEventListener('scroll', handleUserActivity);
     };
-  }, [refreshSession, user]);
-
-  // Optimizamos signOut para hacerlo más rápido
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      
-      // Limpiar el estado de usuario y perfil inmediatamente para UI más responsiva
-      setUser(null);
-      setProfile(null);
-      
-      // Entonces hacer la solicitud real de cierre de sesión
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (err) {
-      console.error("Error signing out:", err);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo cerrar sesión. Por favor, intenta nuevamente.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [refreshSession, resetInactivityTimer, loading, fetchProfile, toast]);
 
   return {
     user,
@@ -167,6 +228,6 @@ export const useAuth = () => {
     loading,
     error,
     signOut,
-    refreshSession, // Exponemos esta función para permitir refrescos manuales si es necesario
+    refreshSession,
   };
 };
